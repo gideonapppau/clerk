@@ -1,0 +1,27 @@
+# Dependencies and generated builds
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+dist/
+**/dist/
+
+# Credentials and local runtime data
+.env
+.env.*
+!.env.example
+gateway-clean/app/data/sessions/
+
+# Recovery artifacts and superseded partial copies
+*.tar.gz
+.keep
+/app/
+/core/
+/core-db/
+/dashboard/
+/gateway/
+/database/
+
+# Operating-system files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,26 @@
+{
+  "name": "clerk-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3001",
+    "build": "next build",
+    "start": "next start -H 0.0.0.0 -p 3000"
+  },
+  "dependencies": {
+    "@fontsource/material-symbols-outlined": "^5.2.45",
+    "@tailwindcss/postcss": "^4.3.0",
+    "geist": "^1.7.2",
+    "next": "^16.2.7",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "tailwindcss": "^4.3.0"
+  },
+  "devDependencies": {
+    "@netlify/plugin-nextjs": "^5.15.12",
+    "@types/node": "25.9.5",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "6.0.3"
+  }
+}
