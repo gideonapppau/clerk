@@ -1,11 +1,75 @@
-# Fly recovery
+# Clerk
 
-The clean recovered source is in:
+WhatsApp-based sales assistant for Ghanaian merchants. Customers message a WhatsApp number, Clerk's AI handles product inquiries, takes orders, processes payments, and escalates to the merchant when needed.
 
-- `dashboard-clean/app` — Next.js dashboard application, including `Dockerfile`, `fly.toml`, `package.json`, and `package-lock.json`.
-- `gateway-clean/app` — TypeScript gateway application, including `package.json`, `package-lock.json`, and compiled `dist` output.
-- `database-source` — `schema.sql` and 26 SQL migration files from the core database image.
+## Architecture
 
-The downloaded source intentionally excludes `node_modules`, Next.js build output, `.env` files, and the gateway's persistent WhatsApp session directory. Reinstall dependencies with `npm ci` after opening the individual app folders.
+```
+WhatsApp → Gateway (Baileys) → Core (Go) → PostgreSQL
+                                  ↕
+                          Dashboard (Next.js)
+```
 
-The temporary archive files are retained as a second copy of the recovered source. Older `app`, `database`, `core`, `dashboard`, and `gateway` folders are partial or placeholder recovery attempts; use the three clean locations above.
+| Service | Stack | Path | Purpose |
+|---------|-------|------|---------|
+| **Core** | Go / Gin | `core/` | API server, conversation engine, payments, LLM integration |
+| **Dashboard** | Next.js / React | `dashboard/` | Merchant admin panel, founder analytics |
+| **Gateway** | Node.js / Baileys | `gateway/` | WhatsApp session management, message routing |
+| **Database** | PostgreSQL | `database/` | Schema, migrations |
+
+## Quick Start
+
+### 1. Database
+```bash
+psql -U postgres -d clerk -f database/schema.sql
+# Then run migrations in order:
+psql -U postgres -d clerk -f database/migrations/001_initial.sql
+# ... through 026
+```
+
+### 2. Core (Go API)
+```bash
+cd core
+cp .env.example .env   # fill in values
+go run ./cmd/server
+# Runs on :8080
+```
+
+### 3. Dashboard (Next.js)
+```bash
+cd dashboard/app
+npm install
+npm run dev
+# Runs on :3001
+```
+
+### 4. Gateway (WhatsApp)
+```bash
+cd gateway/app
+npm install
+npm run dev
+# Runs on :3000
+```
+
+## Environment Variables
+
+See `core/.env.example` for the full list. The critical ones:
+
+| Variable | Description |
+|----------|-------------|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `JWT_SECRET` | Secret for auth tokens |
+| `GROQ_API_KEY` | LLM provider (primary) |
+| `OPENAI_API_KEY` | LLM provider (fallback) |
+| `GATEWAY_URL` | Gateway service URL |
+| `CORE_URL` | Core service public URL |
+| `APP_URL` | Dashboard URL |
+| `PAYSTACK_SECRET_KEY` | Paystack payments |
+| `MOOLRE_PRIVATE_KEY` | Moolre mobile money |
+
+## Deployment
+
+Each service has its own `fly.toml` and `Dockerfile`:
+- `core-solitary-pinecone-9230.fly.dev` — Go core
+- `dashboard-clerk-amber-4821.fly.dev` — Next.js dashboard
+- `gateway-faithful-sound-1832.fly.dev` — WhatsApp gateway

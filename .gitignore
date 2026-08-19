@@ -5,23 +5,42 @@ node_modules/
 **/.next/
 dist/
 **/dist/
+out/
 
 # Credentials and local runtime data
 .env
 .env.*
 !.env.example
-gateway-clean/app/data/sessions/
+
+# WhatsApp session data
+gateway/app/data/sessions/
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+clerk-core
 
 # Recovery artifacts and superseded partial copies
 *.tar.gz
 .keep
-/app/
-/core/
-/core-db/
-/dashboard/
-/gateway/
-/database/
 
 # Operating-system files
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# Package manager stores
+.pnpm-store/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# TypeScript
+*.tsbuildinfo
+tsconfig.tsbuildinfo
