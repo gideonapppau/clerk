@@ -1,0 +1,122 @@
+version: "3.8"
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-clerk}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+      POSTGRES_DB: ${POSTGRES_DB:-clerk}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./database/migrations:/docker-entrypoint-initdb.d/migrations:ro
+      - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/00-init.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-clerk}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ---------------------------------------------------------------------------
+  # Core — Go API server
+  # ---------------------------------------------------------------------------
+  core:
+    build:
+      context: ./core
+      dockerfile: Dockerfile
+    ports:
+      - "${CORE_PORT:-8080}:8080"
+    environment:
+      PORT: "8080"
+      DATABASE_URL: ${DATABASE_URL:-postgres://clerk:secret@postgres:5432/clerk?sslmode=disable}
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LLM_OPENAI_MODEL: ${LLM_OPENAI_MODEL:-gpt-4o-mini}
+      GATEWAY_URL: ${GATEWAY_URL:-http://gateway:3000}
+      CORE_URL: ${CORE_URL:-http://core:8080}
+      APP_URL: ${APP_URL:-http://localhost:3001}
+      CLERK_ENV: ${CLERK_ENV:-development}
+      MOOLRE_PRIVATE_KEY: ${MOOLRE_PRIVATE_KEY:-}
+      MOOLRE_PUBLIC_KEY: ${MOOLRE_PUBLIC_KEY:-}
+      MOOLRE_WEBHOOK_SECRET: ${MOOLRE_WEBHOOK_SECRET:-}
+      PAYSTACK_SECRET_KEY: ${PAYSTACK_SECRET_KEY:-}
+      CLERK_PAYSTACK_PLAN_GROWTH: ${CLERK_PAYSTACK_PLAN_GROWTH:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      PAYMENT_RECOVERY_ALL_PLANS: ${PAYMENT_RECOVERY_ALL_PLANS:-false}
+      PAYMENT_RECOVERY_DELAY: ${PAYMENT_RECOVERY_DELAY:-30m}
+      FOUNDER_HOSTING_USD_MONTH: ${FOUNDER_HOSTING_USD_MONTH:-10}
+      FOUNDER_BSP_USD_MONTH: ${FOUNDER_BSP_USD_MONTH:-15}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Gateway — WhatsApp Baileys session manager
+  # ---------------------------------------------------------------------------
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    ports:
+      - "${GATEWAY_PORT:-3000}:3000"
+    environment:
+      PORT: "3000"
+      HOST: "0.0.0.0"
+      CORE_URL: ${CORE_URL:-http://core:8080}
+      SESSION_DIR: ${SESSION_DIR:-./data/sessions}
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-clerk-dev-webhook}
+      CLERK_ENV: ${CLERK_ENV:-development}
+    volumes:
+      - gateway-sessions:/app/data/sessions
+    depends_on:
+      core:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Dashboard — Next.js merchant admin panel
+  # ---------------------------------------------------------------------------
+  dashboard:
+    build:
+      context: ./dashboard/app
+      dockerfile: Dockerfile
+      args:
+        GATEWAY_URL: ${GATEWAY_URL:-http://gateway:3000}
+        CORE_URL: ${CORE_URL:-http://core:8080}
+        NEXT_PUBLIC_APP_URL: ${APP_URL:-http://localhost:3001}
+        NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY:-local-dev-key}
+    ports:
+      - "${DASHBOARD_PORT:-3001}:3000"
+    environment:
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+      GATEWAY_URL: ${GATEWAY_URL:-http://gateway:3000}
+      CORE_URL: ${CORE_URL:-http://core:8080}
+      NEXT_PUBLIC_APP_URL: ${APP_URL:-http://localhost:3001}
+    depends_on:
+      core:
+        condition: service_healthy
+      gateway:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  gateway-sessions:
