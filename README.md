@@ -19,7 +19,25 @@ WhatsApp → Gateway (Baileys) → Core (Go) → PostgreSQL
 
 ## Quick Start
 
-### 1. Database
+### Docker Compose (recommended)
+
+```bash
+cp .env.example .env   # fill in values
+docker-compose up --build
+```
+
+This starts all four services:
+
+| Service | URL |
+|---------|-----|
+| **Core** | http://localhost:8080 |
+| **Gateway** | http://localhost:3000 |
+| **Dashboard** | http://localhost:3001 |
+| **PostgreSQL** | localhost:5432 |
+
+### Manual Setup
+
+#### 1. Database
 ```bash
 psql -U postgres -d clerk -f database/schema.sql
 # Then run migrations in order:
@@ -27,7 +45,7 @@ psql -U postgres -d clerk -f database/migrations/001_initial.sql
 # ... through 026
 ```
 
-### 2. Core (Go API)
+#### 2. Core (Go API)
 ```bash
 cd core
 cp .env.example .env   # fill in values
@@ -35,7 +53,7 @@ go run ./cmd/server
 # Runs on :8080
 ```
 
-### 3. Dashboard (Next.js)
+#### 3. Dashboard (Next.js)
 ```bash
 cd dashboard/app
 npm install
@@ -43,7 +61,7 @@ npm run dev
 # Runs on :3001
 ```
 
-### 4. Gateway (WhatsApp)
+#### 4. Gateway (WhatsApp)
 ```bash
 cd gateway/app
 npm install
@@ -66,6 +84,16 @@ See `core/.env.example` for the full list. The critical ones:
 | `APP_URL` | Dashboard URL |
 | `PAYSTACK_SECRET_KEY` | Paystack payments |
 | `MOOLRE_PRIVATE_KEY` | Moolre mobile money |
+
+## API Documentation
+
+Full OpenAPI 3.0 spec at [`docs/openapi.yaml`](docs/openapi.yaml). View it at:
+
+```bash
+# Using Docker (no install needed)
+docker run -p 8081:8080 -e SWAGGER_JSON=/api/openapi.yaml -v $(pwd)/docs:/api swaggerapi/swagger-ui
+# Then open http://localhost:8081
+```
 
 ## Deployment
 

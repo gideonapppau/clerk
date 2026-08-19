@@ -15,6 +15,9 @@ out/
 # WhatsApp session data
 gateway/app/data/sessions/
 
+# Docker
+docker-compose.override.yml
+
 # Go build artifacts
 *.exe
 *.exe~

@@ -1,0 +1,2825 @@
+openapi: 3.0.3
+info:
+  title: Clerk Core API
+  description: |
+    WhatsApp-based sales assistant for Ghanaian merchants. This API powers the
+    conversation engine, inventory management, order processing, payment
+    integration, and founder analytics dashboard.
+
+    ## Authentication
+    Most endpoints require a JWT token passed via the `Authorization: Bearer <token>` header.
+    Obtain a token via `POST /api/auth/login` or `POST /api/auth/register`.
+
+    ## Response Envelope
+    All responses use a consistent envelope:
+    - Success: `{ "data": { ... } }`
+    - Error: `{ "error": "message" }`
+  version: 1.0.0
+  contact:
+    name: Gideon Appau
+    email: appaugideon8899@gmail.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Local development (Docker Compose)
+  - url: https://core-solitary-pinecone-9230.fly.dev
+    description: Production
+
+tags:
+  - name: Health
+    description: Service health checks
+  - name: Auth
+    description: Merchant registration and login
+  - name: Inventory
+    description: Product catalog management
+  - name: Orders
+    description: Customer order management
+  - name: Conversations
+    description: WhatsApp conversation tracking
+  - name: Payments
+    description: Payment provider configuration
+  - name: Checkout
+    description: Customer checkout flow
+  - name: Billing
+    description: Subscription plan management
+  - name: Push
+    description: Web push notification management
+  - name: Events
+    description: Merchant event log
+  - name: Simulate
+    description: Message simulation
+  - name: Founder
+    description: Platform analytics (founder only)
+  - name: Founder Ops
+    description: Scorecards, outreach, content management
+  - name: Founder Pipeline
+    description: Sales pipeline management
+  - name: Webhooks
+    description: Inbound webhooks from payment providers and gateway
+
+paths:
+  # =========================================================================
+  # Health
+  # =========================================================================
+  /health:
+    get:
+      tags: [Health]
+      summary: Service health check
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+        "503":
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  error:
+                    type: string
+
+  # =========================================================================
+  # Auth
+  # =========================================================================
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login with phone number
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone:
+                  type: string
+                  example: "+233240000000"
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new merchant
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, phone]
+              properties:
+                name:
+                  type: string
+                  example: "Kofi's Shop"
+                phone:
+                  type: string
+                  example: "+233240000000"
+      responses:
+        "201":
+          description: Registration successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout current session
+      operationId: logout
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current merchant profile
+      operationId: getMe
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Merchant profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Merchant"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Auth]
+      summary: Update merchant profile
+      operationId: patchMe
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                businessScope:
+                  type: string
+      responses:
+        "200":
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+
+  # =========================================================================
+  # Inventory
+  # =========================================================================
+  /api/inventory:
+    get:
+      tags: [Inventory]
+      summary: List inventory items
+      operationId: listInventory
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Inventory list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/InventoryItem"
+    post:
+      tags: [Inventory]
+      summary: Create an inventory item
+      operationId: createInventory
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, price]
+              properties:
+                name:
+                  type: string
+                  example: "Blue Polo Shirt"
+                price:
+                  type: integer
+                  minimum: 0
+                  example: 5000
+                stock:
+                  type: integer
+                  minimum: 0
+                category:
+                  type: string
+                description:
+                  type: string
+                isService:
+                  type: boolean
+                unit:
+                  type: string
+                unlimitedStock:
+                  type: boolean
+      responses:
+        "201":
+          description: Item created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      name:
+                        type: string
+
+  /api/inventory/{itemId}:
+    put:
+      tags: [Inventory]
+      summary: Update an inventory item
+      operationId: updateInventory
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ItemId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                price:
+                  type: integer
+                stock:
+                  type: integer
+                category:
+                  type: string
+                description:
+                  type: string
+                isService:
+                  type: boolean
+                unit:
+                  type: string
+                unlimitedStock:
+                  type: boolean
+      responses:
+        "200":
+          description: Item updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+
+  /api/inventory/import:
+    post:
+      tags: [Inventory]
+      summary: Bulk import inventory items
+      operationId: importInventory
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [name, price]
+                    properties:
+                      name:
+                        type: string
+                      price:
+                        type: integer
+                      stock:
+                        type: integer
+                      category:
+                        type: string
+                      description:
+                        type: string
+                      isService:
+                        type: boolean
+                      unit:
+                        type: string
+      responses:
+        "200":
+          description: Import result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      imported:
+                        type: integer
+                      total:
+                        type: integer
+
+  # =========================================================================
+  # Orders
+  # =========================================================================
+  /api/orders:
+    get:
+      tags: [Orders]
+      summary: List orders
+      operationId: listOrders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING_CONFIRMATION, CONFIRMED, CANCELLED]
+      responses:
+        "200":
+          description: Order list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      orders:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Order"
+
+  /api/orders/{orderId}/confirm:
+    post:
+      tags: [Orders]
+      summary: Confirm an order
+      operationId: confirmOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      responses:
+        "200":
+          description: Order confirmed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        example: confirmed
+                      orderId:
+                        type: string
+                        format: uuid
+
+  /api/orders/{orderId}/cancel:
+    post:
+      tags: [Orders]
+      summary: Cancel an order
+      operationId: cancelOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      responses:
+        "200":
+          description: Order cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        example: cancelled
+                      orderId:
+                        type: string
+                        format: uuid
+
+  /api/orders/public/{orderId}:
+    get:
+      tags: [Orders]
+      summary: Get order details (public, no auth)
+      operationId: getPublicOrder
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      responses:
+        "200":
+          description: Order details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Order"
+
+  # =========================================================================
+  # Conversations
+  # =========================================================================
+  /api/conversations:
+    get:
+      tags: [Conversations]
+      summary: List conversations
+      operationId: listConversations
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, WAITING_MERCHANT, MERCHANT_ENGAGED, CLOSED]
+      responses:
+        "200":
+          description: Conversation list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      conversations:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/ConversationSummary"
+
+  /api/conversations/{conversationId}:
+    get:
+      tags: [Conversations]
+      summary: Get conversation with messages
+      operationId: getConversation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Conversation details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+
+  /api/conversations/{conversationId}/resume:
+    post:
+      tags: [Conversations]
+      summary: Resume bot on a conversation
+      operationId: resumeConversation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Bot resumed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        example: resumed
+                      conversationId:
+                        type: string
+                        format: uuid
+
+  /api/conversations/{conversationId}/takeover:
+    post:
+      tags: [Conversations]
+      summary: Take over conversation (human mode)
+      operationId: takeoverConversation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Conversation taken over
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        example: taken_over
+                      conversationId:
+                        type: string
+                        format: uuid
+
+  # =========================================================================
+  # Events
+  # =========================================================================
+  /api/events:
+    get:
+      tags: [Events]
+      summary: List merchant events
+      operationId: listEvents
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+          description: Filter by event type
+      responses:
+        "200":
+          description: Event list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      events:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Event"
+
+  # =========================================================================
+  # Payments
+  # =========================================================================
+  /api/payments/methods:
+    get:
+      tags: [Payments]
+      summary: List payment methods
+      operationId: listPaymentMethods
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Payment methods
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      methods:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/PaymentMethod"
+
+  /api/payments/paystack:
+    get:
+      tags: [Payments]
+      summary: Get Paystack connection status
+      operationId: getPaystack
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Paystack status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      connected:
+                        type: boolean
+                      hasKeys:
+                        type: boolean
+    post:
+      tags: [Payments]
+      summary: Save Paystack configuration
+      operationId: savePaystack
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reference]
+              properties:
+                reference:
+                  type: string
+                code:
+                  type: string
+      responses:
+        "200":
+          description: Paystack saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+    delete:
+      tags: [Payments]
+      summary: Disconnect Paystack
+      operationId: disconnectPaystack
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Paystack disconnected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+
+  /api/payments/moolre:
+    get:
+      tags: [Payments]
+      summary: Get Moolre connection status
+      operationId: getMoolre
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Moolre status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      connected:
+                        type: boolean
+                      hasCredentials:
+                        type: boolean
+    post:
+      tags: [Payments]
+      summary: Save Moolre configuration
+      operationId: saveMoolre
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone:
+                  type: string
+                privateKey:
+                  type: string
+                publicKey:
+                  type: string
+      responses:
+        "200":
+          description: Moolre saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+    delete:
+      tags: [Payments]
+      summary: Disconnect Moolre
+      operationId: disconnectMoolre
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Moolre disconnected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+
+  /api/payments/momo:
+    post:
+      tags: [Payments]
+      summary: Save Mobile Money number
+      operationId: saveMomo
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone:
+                  type: string
+                name:
+                  type: string
+      responses:
+        "200":
+          description: Mobile Money saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+    delete:
+      tags: [Payments]
+      summary: Remove Mobile Money number
+      operationId: removeMomo
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Mobile Money removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+
+  /api/payments/moolre/provision:
+    post:
+      tags: [Payments]
+      summary: Provision Moolre account
+      operationId: provisionMoolre
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Provisioned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                      phone:
+                        type: string
+                      message:
+                        type: string
+
+  /api/payments/default:
+    post:
+      tags: [Payments]
+      summary: Set default payment method
+      operationId: setDefaultPayment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type]
+              properties:
+                type:
+                  type: string
+                  enum: [paystack, moolre, momo]
+      responses:
+        "200":
+          description: Default set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+
+  # =========================================================================
+  # Checkout
+  # =========================================================================
+  /api/checkout/complete:
+    post:
+      tags: [Checkout]
+      summary: Complete checkout for an order
+      operationId: checkoutComplete
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderId]
+              properties:
+                orderId:
+                  type: string
+                  format: uuid
+                conversationId:
+                  type: string
+                  format: uuid
+                customerId:
+                  type: string
+      responses:
+        "200":
+          description: Checkout ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                      orderId:
+                        type: string
+                        format: uuid
+                      checkoutUrl:
+                        type: string
+                        format: uri
+                      reference:
+                        type: string
+                      amount:
+                        type: integer
+                      provider:
+                        type: string
+
+  /api/checkout/initiate-payment:
+    post:
+      tags: [Checkout]
+      summary: Initiate payment for an order
+      operationId: initiatePayment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderId]
+              properties:
+                orderId:
+                  type: string
+                  format: uuid
+      responses:
+        "200":
+          description: Payment initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                      orderId:
+                        type: string
+                      reference:
+                        type: string
+                      checkoutUrl:
+                        type: string
+                      provider:
+                        type: string
+                      amount:
+                        type: integer
+
+  /api/checkout/issue-token:
+    post:
+      tags: [Checkout]
+      summary: Issue a checkout token for an order
+      operationId: issueCheckoutToken
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderId]
+              properties:
+                orderId:
+                  type: string
+                  format: uuid
+                merchantId:
+                  type: string
+                  format: uuid
+      responses:
+        "200":
+          description: Token issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      token:
+                        type: string
+                      orderId:
+                        type: string
+                      expires:
+                        type: integer
+                        description: Unix timestamp
+
+  /api/checkout/verify-token:
+    post:
+      tags: [Checkout]
+      summary: Verify a checkout token
+      operationId: verifyCheckoutToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+      responses:
+        "200":
+          description: Token verification result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      valid:
+                        type: boolean
+                      merchantId:
+                        type: string
+
+  /api/checkout/resolve:
+    post:
+      tags: [Checkout]
+      summary: Resolve checkout payment status
+      operationId: resolveCheckout
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderId]
+              properties:
+                orderId:
+                  type: string
+                  format: uuid
+      responses:
+        "200":
+          description: Checkout status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                      orderId:
+                        type: string
+
+  /api/checkout/mark-paid:
+    post:
+      tags: [Checkout]
+      summary: Manually mark an order as paid
+      operationId: markOrderPaid
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderId]
+              properties:
+                orderId:
+                  type: string
+                  format: uuid
+      responses:
+        "200":
+          description: Order marked as paid
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                      orderId:
+                        type: string
+
+  # =========================================================================
+  # Billing
+  # =========================================================================
+  /api/billing/status:
+    get:
+      tags: [Billing]
+      summary: Get billing status and usage
+      operationId: billingStatus
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Billing status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      plan:
+                        type: string
+                        enum: [trial, starter, growth]
+                      createdAt:
+                        type: string
+                        format: date-time
+                      limits:
+                        $ref: "#/components/schemas/PlanLimits"
+                      usage:
+                        $ref: "#/components/schemas/PlanUsage"
+
+  /api/billing/checkout:
+    post:
+      tags: [Billing]
+      summary: Initiate plan upgrade checkout
+      operationId: billingCheckout
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan]
+              properties:
+                plan:
+                  type: string
+                  enum: [trial, starter, growth]
+                email:
+                  type: string
+                  format: email
+      responses:
+        "200":
+          description: Checkout initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                      plan:
+                        type: string
+                      amount:
+                        type: integer
+                      reference:
+                        type: string
+                      checkoutUrl:
+                        type: string
+                        format: uri
+
+  /api/billing/verify:
+    post:
+      tags: [Billing]
+      summary: Verify a billing payment
+      operationId: billingVerify
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reference]
+              properties:
+                reference:
+                  type: string
+      responses:
+        "200":
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                      plan:
+                        type: string
+
+  /api/billing/cancel:
+    post:
+      tags: [Billing]
+      summary: Cancel subscription
+      operationId: billingCancel
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Subscription cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                      previousPlan:
+                        type: string
+                      currentPlan:
+                        type: string
+
+  # =========================================================================
+  # Push Notifications
+  # =========================================================================
+  /api/push/config:
+    get:
+      tags: [Push]
+      summary: Get push notification configuration
+      operationId: pushConfig
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Push config
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      vapidPublicKey:
+                        type: string
+                      supported:
+                        type: boolean
+
+  /api/push/status:
+    get:
+      tags: [Push]
+      summary: Get push subscription status
+      operationId: pushStatus
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Push status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      subscribed:
+                        type: boolean
+                      count:
+                        type: integer
+
+  /api/push/subscribe:
+    post:
+      tags: [Push]
+      summary: Subscribe to push notifications
+      operationId: pushSubscribe
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [endpoint, p256dh, auth]
+              properties:
+                endpoint:
+                  type: string
+                  format: uri
+                p256dh:
+                  type: string
+                auth:
+                  type: string
+                userAgent:
+                  type: string
+      responses:
+        "200":
+          description: Subscribed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+
+  /api/push/unsubscribe:
+    post:
+      tags: [Push]
+      summary: Unsubscribe from push notifications
+      operationId: pushUnsubscribe
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                endpoint:
+                  type: string
+                  format: uri
+                  description: If omitted, all subscriptions are removed
+      responses:
+        "200":
+          description: Unsubscribed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+
+  /api/push/test:
+    post:
+      tags: [Push]
+      summary: Send a test push notification
+      operationId: pushTest
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      sent:
+                        type: integer
+                      failed:
+                        type: integer
+
+  # =========================================================================
+  # Simulate
+  # =========================================================================
+  /api/simulate:
+    post:
+      tags: [Simulate]
+      summary: Simulate a WhatsApp message
+      operationId: simulate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [merchantId, customerPhone, text]
+              properties:
+                merchantId:
+                  type: string
+                  format: uuid
+                customerPhone:
+                  type: string
+                text:
+                  type: string
+                  example: "Do you have blue shirts?"
+                messageKind:
+                  type: string
+                  enum: [whatsapp, dashboard_simulate]
+      responses:
+        "200":
+          description: Simulation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                      reply:
+                        type: string
+                      conversationId:
+                        type: string
+                        format: uuid
+                      state:
+                        type: string
+                      orderId:
+                        type: string
+                        format: uuid
+                      paymentUrl:
+                        type: string
+                      needsEscalation:
+                        type: boolean
+                      takeover:
+                        type: boolean
+
+  # =========================================================================
+  # Intent Classification (standalone)
+  # =========================================================================
+  /api/intent:
+    post:
+      tags: [Simulate]
+      summary: Classify a message intent
+      operationId: classifyIntent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text:
+                  type: string
+      responses:
+        "200":
+          description: Intent classification
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      intent:
+                        type: string
+                      confidence:
+                        type: number
+                        format: float
+
+  # =========================================================================
+  # Founder Analytics
+  # =========================================================================
+  /api/founder/overview:
+    get:
+      tags: [Founder]
+      summary: Platform overview metrics
+      operationId: founderOverview
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Overview metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/FounderOverview"
+
+  /api/founder/merchants:
+    get:
+      tags: [Founder]
+      summary: Merchant list and onboarding status
+      operationId: founderMerchants
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Merchant data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      merchantStatus:
+                        type: object
+                        properties:
+                          noWhatsApp:
+                            type: integer
+                          noInventory:
+                            type: integer
+                          noFirstReply:
+                            type: integer
+                          noOrder:
+                            type: integer
+                          atRisk:
+                            type: integer
+                      onboarding:
+                        type: object
+                        properties:
+                          registered:
+                            type: integer
+                          live:
+                            type: integer
+                          connecting:
+                            type: integer
+                      merchants:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Merchant"
+
+  /api/founder/funnel:
+    get:
+      tags: [Founder]
+      summary: Merchant conversion funnel
+      operationId: founderFunnel
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Funnel data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      funnel:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            stage:
+                              type: string
+                            count:
+                              type: integer
+
+  /api/founder/friction:
+    get:
+      tags: [Founder]
+      summary: Friction and error metrics
+      operationId: founderFriction
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Friction data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      escalations:
+                        type: integer
+                      frustrations:
+                        type: integer
+                      failedPayments:
+                        type: integer
+                      llmErrors:
+                        type: integer
+
+  /api/founder/latency:
+    get:
+      tags: [Founder]
+      summary: Response latency metrics
+      operationId: founderLatency
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Latency data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      latency:
+                        type: array
+                        items:
+                          type: object
+
+  /api/founder/peak-hours:
+    get:
+      tags: [Founder]
+      summary: Peak conversation hours
+      operationId: founderPeakHours
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Peak hours data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      peakHours:
+                        type: array
+                        items:
+                          type: object
+
+  /api/founder/timeseries:
+    get:
+      tags: [Founder]
+      summary: Merchant and order registration timeseries
+      operationId: founderTimeseries
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Timeseries data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      merchants:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/DayCount"
+                      orders:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/DayCount"
+
+  /api/founder/unit-economics:
+    get:
+      tags: [Founder]
+      summary: Unit economics metrics
+      operationId: founderUnitEconomics
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Unit economics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      totalRevenue:
+                        type: number
+                        format: float
+                      totalPaidOrders:
+                        type: integer
+                      avgOrderValue:
+                        type: number
+                        format: float
+                      revenuePerMerchant:
+                        type: number
+                        format: float
+                      conversionRate:
+                        type: number
+                        format: float
+
+  /api/founder/drop-offs:
+    get:
+      tags: [Founder]
+      summary: Order drop-off analysis
+      operationId: founderDropOffs
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Drop-off data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      dropOffs:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            stage:
+                              type: string
+                            count:
+                              type: integer
+                            rate:
+                              type: number
+
+  /api/founder/conversation-funnel:
+    get:
+      tags: [Founder]
+      summary: Conversation funnel analysis
+      operationId: founderConversationFunnel
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Conversation funnel
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      conversationFunnel:
+                        type: array
+                        items:
+                          type: object
+
+  /api/founder/conversation-replay:
+    get:
+      tags: [Founder]
+      summary: Replay a conversation's messages
+      operationId: founderConversationReplay
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: conversationId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Conversation messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      conversationId:
+                        type: string
+                        format: uuid
+                      messages:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Message"
+
+  /api/founder/reliability:
+    get:
+      tags: [Founder]
+      summary: System reliability events (7-day)
+      operationId: founderReliability
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Reliability data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      reliability:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            type:
+                              type: string
+                            count:
+                              type: integer
+                      totalEvents:
+                        type: integer
+                      period:
+                        type: string
+
+  # =========================================================================
+  # Founder Ops
+  # =========================================================================
+  /api/founder/ops/scorecards:
+    get:
+      tags: [Founder Ops]
+      summary: List scorecards
+      operationId: founderScorecardList
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Scorecard list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      scorecards:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Scorecard"
+    post:
+      tags: [Founder Ops]
+      summary: Create or update a scorecard
+      operationId: founderScorecardUpsert
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                  description: If provided, updates existing scorecard
+                name:
+                  type: string
+                score:
+                  type: integer
+                notes:
+                  type: string
+      responses:
+        "201":
+          description: Scorecard created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      status:
+                        type: string
+        "200":
+          description: Scorecard updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                      id:
+                        type: string
+
+  /api/founder/ops/outreach:
+    get:
+      tags: [Founder Ops]
+      summary: List outreach records
+      operationId: founderOutreachList
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Outreach list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      outreach:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Outreach"
+    post:
+      tags: [Founder Ops]
+      summary: Create an outreach record
+      operationId: founderOutreachCreate
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [merchantId, message]
+              properties:
+                merchantId:
+                  type: string
+                  format: uuid
+                channel:
+                  type: string
+                  enum: [whatsapp, sms, email]
+                  default: whatsapp
+                message:
+                  type: string
+                subject:
+                  type: string
+      responses:
+        "201":
+          description: Outreach created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      status:
+                        type: string
+
+  /api/founder/ops/outreach/{id}:
+    delete:
+      tags: [Founder Ops]
+      summary: Delete an outreach record
+      operationId: founderOutreachDelete
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Outreach deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+
+  /api/founder/ops/outreach/stats:
+    get:
+      tags: [Founder Ops]
+      summary: Outreach statistics
+      operationId: founderOutreachStats
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Outreach stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      sent:
+                        type: integer
+                      responded:
+                        type: integer
+                      responseRate:
+                        type: number
+                        format: float
+
+  /api/founder/ops/content:
+    get:
+      tags: [Founder Ops]
+      summary: Get CMS content
+      operationId: founderContentGet
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Content map
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      content:
+                        type: object
+                        additionalProperties:
+                          type: string
+    put:
+      tags: [Founder Ops]
+      summary: Upsert CMS content
+      operationId: founderContentUpsert
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+              example:
+                headline: "Welcome to Clerk"
+                subheadline: "Your WhatsApp sales assistant"
+      responses:
+        "200":
+          description: Content saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+
+  /api/founder/ops/forecast:
+    get:
+      tags: [Founder Ops]
+      summary: Growth forecast (30-day)
+      operationId: founderForecast
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Forecast data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      forecast:
+                        type: array
+                        items:
+                          type: object
+
+  /api/founder/ops/onboarding-health:
+    get:
+      tags: [Founder Ops]
+      summary: Onboarding funnel health
+      operationId: founderOnboardingHealth
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Onboarding health
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      totalMerchants:
+                        type: integer
+                      connectedMerchants:
+                        type: integer
+                      withInventory:
+                        type: integer
+                      withFirstMessage:
+                        type: integer
+                      withFirstOrder:
+                        type: integer
+                      recentMerchants:
+                        type: integer
+                      completionRate:
+                        type: number
+                        format: float
+
+  # =========================================================================
+  # Founder Pipeline
+  # =========================================================================
+  /api/founder/pipeline:
+    get:
+      tags: [Founder Pipeline]
+      summary: List pipeline entries
+      operationId: founderPipelineList
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: stage
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Pipeline list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      pipeline:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/PipelineEntry"
+    post:
+      tags: [Founder Pipeline]
+      summary: Create a pipeline entry
+      operationId: founderPipelineCreate
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                stage:
+                  type: string
+                  enum: [lead, qualified, contacted, converted, lost]
+                  default: lead
+                notes:
+                  type: string
+                priority:
+                  type: integer
+      responses:
+        "201":
+          description: Pipeline entry created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      status:
+                        type: string
+
+  /api/founder/pipeline/{id}:
+    put:
+      tags: [Founder Pipeline]
+      summary: Update a pipeline entry
+      operationId: founderPipelineUpdate
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                stage:
+                  type: string
+                notes:
+                  type: string
+                priority:
+                  type: integer
+      responses:
+        "200":
+          description: Pipeline entry updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+    delete:
+      tags: [Founder Pipeline]
+      summary: Delete a pipeline entry
+      operationId: founderPipelineDelete
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Pipeline entry deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+
+  /api/founder/pipeline/summary:
+    get:
+      tags: [Founder Pipeline]
+      summary: Pipeline stage summary
+      operationId: founderPipelineSummary
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Pipeline summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      stages:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            stage:
+                              type: string
+                            count:
+                              type: integer
+                      total:
+                        type: integer
+
+  # =========================================================================
+  # Webhooks (no auth — called by external services)
+  # =========================================================================
+  /webhooks/message:
+    post:
+      tags: [Webhooks]
+      summary: Inbound WhatsApp message (from Gateway)
+      operationId: webhookMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [merchantId, customerPhone, text]
+              properties:
+                merchantId:
+                  type: string
+                  format: uuid
+                customerPhone:
+                  type: string
+                text:
+                  type: string
+                messageKind:
+                  type: string
+      responses:
+        "200":
+          description: Message processed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  reply:
+                    type: string
+                  conversationId:
+                    type: string
+                  state:
+                    type: string
+                  orderId:
+                    type: string
+                  paymentUrl:
+                    type: string
+
+  /webhooks/status:
+    post:
+      tags: [Webhooks]
+      summary: WhatsApp connection status update (from Gateway)
+      operationId: webhookStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                merchantId:
+                  type: string
+                  format: uuid
+                connected:
+                  type: boolean
+                phone:
+                  type: string
+      responses:
+        "200":
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+
+  /webhooks/startup:
+    post:
+      tags: [Webhooks]
+      summary: Gateway startup notification
+      operationId: webhookStartup
+      responses:
+        "200":
+          description: All merchants marked disconnected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+
+  /webhooks/reachout:
+    post:
+      tags: [Webhooks]
+      summary: Check reachout restrictions
+      operationId: webhookReachout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sessionId:
+                  type: string
+                phone:
+                  type: string
+      responses:
+        "200":
+          description: Reachout check result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessionId:
+                    type: string
+                  restricted:
+                    type: boolean
+    get:
+      tags: [Webhooks]
+      summary: Get reachout restriction status
+      operationId: webhookReachoutGet
+      responses:
+        "200":
+          description: Reachout status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  restricted:
+                    type: boolean
+                  reason:
+                    type: string
+
+  /webhooks/merchant-message:
+    post:
+      tags: [Webhooks]
+      summary: Merchant-sent message (from Gateway human mode)
+      operationId: webhookMerchantMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                conversationId:
+                  type: string
+                  format: uuid
+                from:
+                  type: string
+                text:
+                  type: string
+                messageKind:
+                  type: string
+      responses:
+        "200":
+          description: Message saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+
+  /webhooks/paystack/{merchantId}:
+    post:
+      tags: [Webhooks]
+      summary: Paystack payment webhook (per-merchant)
+      operationId: webhookPaystack
+      parameters:
+        - name: merchantId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Paystack webhook payload
+      responses:
+        "200":
+          description: Processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+
+  /webhooks/paystack/platform:
+    post:
+      tags: [Webhooks]
+      summary: Paystack platform-level webhook (subscriptions)
+      operationId: webhookPaystackPlatform
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Paystack platform webhook payload
+      responses:
+        "200":
+          description: Processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+
+  /webhooks/moolre:
+    post:
+      tags: [Webhooks]
+      summary: Moolre mobile money payment webhook
+      operationId: webhookMoolre
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Moolre webhook payload
+      responses:
+        "200":
+          description: Processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+
+# =============================================================================
+# Components
+# =============================================================================
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token from /api/auth/login or /api/auth/register
+
+  parameters:
+    OrderId:
+      name: orderId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+    ItemId:
+      name: itemId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    AuthResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            token:
+              type: string
+              description: JWT token
+            merchantId:
+              type: string
+              format: uuid
+
+    Merchant:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+            phone:
+              type: string
+            plan:
+              type: string
+              enum: [trial, starter, growth]
+            businessScope:
+              type: string
+
+    InventoryItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        price:
+          type: integer
+          description: Price in pesewas (Ghana cedis * 100)
+        stock:
+          type: integer
+        category:
+          type: string
+        description:
+          type: string
+        isService:
+          type: boolean
+        unit:
+          type: string
+        unlimitedStock:
+          type: boolean
+        active:
+          type: boolean
+
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING_CONFIRMATION, CONFIRMED, CANCELLED]
+        customerPhone:
+          type: string
+        total:
+          type: integer
+          description: Total in pesewas
+        paidAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    ConversationSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [ACTIVE, WAITING_MERCHANT, MERCHANT_ENGAGED, CLOSED]
+        customerPhone:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        lastMessage:
+          type: string
+        lastMessageAt:
+          type: string
+
+    Conversation:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            status:
+              type: string
+            customerPhone:
+              type: string
+            mode:
+              type: string
+              enum: [BOT, HUMAN]
+            state:
+              type: string
+              description: Conversation state machine state
+            messages:
+              type: array
+              items:
+                $ref: "#/components/schemas/Message"
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sender:
+          type: string
+          enum: [customer, clerk, merchant]
+        body:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    PaymentMethod:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [paystack, moolre, momo]
+        isDefault:
+          type: boolean
+        details:
+          type: string
+
+    Event:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+        payload:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    Scorecard:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        score:
+          type: integer
+        notes:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    Outreach:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        merchantId:
+          type: string
+          format: uuid
+        channel:
+          type: string
+        message:
+          type: string
+        subject:
+          type: string
+        status:
+          type: string
+          enum: [sent, responded]
+        createdAt:
+          type: string
+          format: date-time
+
+    PipelineEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        stage:
+          type: string
+          enum: [lead, qualified, contacted, converted, lost]
+        notes:
+          type: string
+        priority:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    FounderOverview:
+      type: object
+      properties:
+        totalMerchants:
+          type: integer
+        liveMerchants:
+          type: integer
+        totalOrders:
+          type: integer
+        totalRevenue:
+          type: number
+          format: float
+        totalConversations:
+          type: integer
+        activeConversations:
+          type: integer
+        merchants30d:
+          type: integer
+        ordersToday:
+          type: integer
+
+    PlanLimits:
+      type: object
+      properties:
+        maxInventory:
+          type: integer
+        maxMessagesPerDay:
+          type: integer
+        maxConversations:
+          type: integer
+
+    PlanUsage:
+      type: object
+      properties:
+        inventory:
+          type: integer
+        messages24h:
+          type: integer
+        conversations:
+          type: integer
+        totalOrders:
+          type: integer
+        paidOrders:
+          type: integer
+
+    DayCount:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        count:
+          type: integer
+
+    StatusResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            status:
+              type: string
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Unauthorized — missing or invalid token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
